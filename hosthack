@@ -1,0 +1,96 @@
+#!/bin/bash
+
+function help {
+	scriptname=`basename $0`
+	echo "Usage: $scriptname hostname <target>"
+	echo ""
+	echo "hostname - name of the host that you want to set in /etc/hosts"
+	echo "target - hostname or IP address where you want to point hostname,"
+	echo "   or empty to remove an entry."
+	exit
+}
+
+function failed_host {
+	echo "Failed to lookup hostname"
+	exit
+}
+
+function hack_noexist {
+	echo "No host hack found in /etc/hosts."
+	exit
+}
+
+function permissions_test {
+	if [ ! -w /etc/hosts ]; then
+		echo "You do not have permissions to modify /etc/hosts. (Try sudo?)"
+		exit
+	fi
+}
+
+function hack_remove {
+	if [ "`grep hosthack /etc/hosts | grep $1`"  ]; then
+		echo "Removing $1."
+		sed -i -e "/$1.*[^ tab]hosthack\$/d" /etc/hosts
+	fi
+}
+
+function hack_list {
+	if [ "`grep hosthack /etc/hosts`" = "" ]; then
+		echo "No hosthacks set."
+	else
+		echo ""
+		echo "Current list of hosthacks:"
+		grep hosthack /etc/hosts
+	fi
+}
+
+
+hostname=$1
+target=$2
+
+if [[ -z "$hostname" || "$hostname" = "-h" || "$hostname" = "--help" ]]; then
+	help
+fi
+
+# Make sure user can edit the hosts file
+permissions_test
+
+
+# Remove existing hosthack
+if [ -z "$target" ]; then
+	hack_remove $hostname
+
+# Set a new hosthack
+else
+	# Create entry
+	if [ "`echo $target | grep [[:alpha:]]`" = "" ]; then
+		# Target is IP
+		hack_remove $target
+		entry="$target\t$hostname\thosthack"
+	else
+		# Target is hostname
+		ip=`host $target | cut  -d ' ' -f 4`
+		if [ "$ip" = "found:" ]; then
+			failed_host
+		fi
+
+		hack_remove $ip
+		entry="$ip\t$hostname\t$target\thosthack"
+	fi
+
+	hack_remove $hostname
+
+	echo -e "Adding to /etc/hosts: $entry"
+	echo -e "$entry" >> /etc/hosts	
+
+fi
+
+
+# Flush hosts
+if [ `whereis dscacheutil` != "" ]; then
+	echo "Flushing cache."
+fi
+
+hack_list
+
+
