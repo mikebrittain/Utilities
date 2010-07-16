@@ -44,11 +44,23 @@ function hack_list {
 	fi
 }
 
+# Check whether an IP address is already used outside of host hacks
+function hack_conflict {
+	if [ "`sed -e "/hosthack$/d" /etc/hosts | grep $1`" != "" ]; then
+		echo "IP address $1 conflicts with existing hosts entry."
+		sed -e "/hosthack$/d" /etc/hosts | grep $1
+		exit
+	fi
+}
 
 hostname=$1
 target=$2
 
-if [[ -z "$hostname" || "$hostname" = "-h" || "$hostname" = "--help" ]]; then
+if [ -z "$hostname" ]; then
+	hack_list
+	exit
+fi
+if [[ "$hostname" = "-h" || "$hostname" = "--help" ]]; then
 	help
 fi
 
@@ -65,6 +77,7 @@ else
 	# Create entry
 	if [ "`echo $target | grep [[:alpha:]]`" = "" ]; then
 		# Target is IP
+		hack_conflict $target
 		hack_remove $target
 		entry="$target\t$hostname\thosthack"
 	else
@@ -74,6 +87,7 @@ else
 			failed_host
 		fi
 
+		hack_conflict $ip
 		hack_remove $ip
 		entry="$ip\t$hostname\t$target\thosthack"
 	fi
